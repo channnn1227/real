@@ -39,12 +39,12 @@ def get_real_estate_transactions(b_code, deal_ymd):
     url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
     params = {
         "serviceKey": GO_DATA_API_KEY,
-        "LAWD_CD": b_code[:5],  # API 규격에 맞게 법정동 코드 앞 5자리만 사용
+        "LAWD_CD": b_code[:5],
         "DEAL_YMD": deal_ymd,
         "numOfRows": "50"
     }
     try:
-        response = requests.get(url, params=params, timeout=10) # 타임아웃을 10초로 넉넉하게 설정
+        response = requests.get(url, params=params, timeout=10)
         if response.status_code == 200:
             root = ET.fromstring(response.content)
             transactions = []
@@ -79,7 +79,7 @@ def search():
 
     today = datetime.now()
     transactions = []
-    for i in range(12): # 최근 12개월
+    for i in range(12):
         month_offset = today.month - i
         year_offset = today.year
         if month_offset <= 0:
@@ -97,7 +97,32 @@ def search():
         "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
     })
 
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+# ★★★★★ 진단용 테스트 페이지: 이 페이지로 접속해서 키를 테스트합니다 ★★★★★
+# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+@app.route('/test-key')
+def test_key():
+    test_url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
+    test_params = {
+        "serviceKey": GO_DATA_API_KEY,
+        "LAWD_CD": "11680", # 테스트용 지역 코드 (강남구)
+        "DEAL_YMD": "202401", # 테스트용 날짜
+        "numOfRows": "1"
+    }
+    try:
+        print(">>> 공공데이터 API 키 테스트를 시작합니다...")
+        response = requests.get(test_url, params=test_params, timeout=10)
+        print(f">>> 응답 코드: {response.status_code}")
+        print(f">>> 응답 내용: {response.text}")
+        if "SERVICE KEY IS NOT REGISTERED" in response.text:
+            return "<h1>테스트 실패: 공공데이터 API 키가 잘못되었습니다.</h1><p>Render의 환경 변수에서 GO_DATA_API_KEY 값을 다시 확인해주세요.</p>"
+        elif response.status_code == 200:
+            return "<h1>테스트 성공: 공공데이터 API 키가 정상입니다.</h1>"
+        else:
+            return f"<h1>테스트 실패: 알 수 없는 오류. 응답 코드: {response.status_code}</h1><p>{response.text}</p>"
+    except Exception as e:
+        print(f">>> 테스트 중 예외 발생: {e}")
+        return f"<h1>테스트 실패: 서버에서 예외가 발생했습니다.</h1><p>{e}</p>"
+
 if __name__ == '__main__':
-    # 이 부분은 Render에서 Gunicorn을 사용할 때는 실행되지 않습니다.
-    # 로컬 PC에서 직접 테스트할 때만 사용됩니다.
     app.run(debug=True)
