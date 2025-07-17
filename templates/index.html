@@ -137,5 +137,25 @@
             }
         }
     </script>
+    document.getElementById("search-form").addEventListener("submit", function(e) {
+    e.preventDefault();
+    const address = document.getElementById("address-input").value;
+
+    fetch("/search", {
+        method: "POST",
+        headers: {"Content-Type": "application/x-www-form-urlencoded"},
+        body: `address=${encodeURIComponent(address)}`
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            alert(data.error);
+        } else {
+            console.log(data.transactions);
+            // 지도 중심 이동 및 마커 표시 코드 등 추가 필요
+        }
+    })
+});
+</script>
 </body>
 </html>
