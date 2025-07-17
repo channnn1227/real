@@ -42,17 +42,16 @@ def get_coords_from_address(address):
 
 # 국토교통부 실거래가 조회 API
 def get_real_estate_transactions(b_code, deal_ymd):
-    lawd_cd = b_code[:5]  # 국토부 API는 앞 5자리만 필요
     url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
     params = {
         "serviceKey": GO_DATA_API_KEY,
-        "LAWD_CD": lawd_cd,
+        "LAWD_CD": b_code[:5],  # b_code의 앞 5자리만 사용해야 함
         "DEAL_YMD": deal_ymd,
         "numOfRows": "50"
     }
-    response = requests.get(url, params=params)
-    if response.status_code == 200:
-        try:
+    try:
+        response = requests.get(url, params=params, timeout=5)
+        if response.status_code == 200:
             root = ET.fromstring(response.content)
             transactions = []
             for item in root.findall('.//item'):
@@ -62,7 +61,6 @@ def get_real_estate_transactions(b_code, deal_ymd):
                 deal_year = item.find('년').text.strip()
                 deal_month = item.find('월').text.strip()
                 deal_day = item.find('일').text.strip()
-                
                 transactions.append({
                     "price": f"{price}만원",
                     "apt_name": apt_name,
@@ -70,9 +68,10 @@ def get_real_estate_transactions(b_code, deal_ymd):
                     "date": f"{deal_year}년 {deal_month}월 {deal_day}일"
                 })
             return transactions
-        except ET.ParseError:
-            return []
+    except Exception as e:
+        print(f"[실거래가 API 오류] {e}")
     return []
+
 
 @app.route('/')
 def index():
@@ -89,23 +88,29 @@ def search():
     if not location_info:
         return jsonify({"error": "유효하지 않은 주소이거나 변환에 실패했습니다."}), 404
 
-    today = datetime.now()
-    transactions = []
-    for i in range(12): # 최근 12개월 데이터 조회
-        month_offset = today.month - i
-        year_offset = today.year
-        if month_offset <= 0:
-            month_offset += 12
-            year_offset -= 1
-        deal_ymd = f"{year_offset}{month_offset:02d}"
-        transactions.extend(get_real_estate_transactions(location_info['b_code'], deal_ymd))
+    try:
+        today = datetime.now()
+        transactions = []
+        for i in range(12):  # 최근 12개월
+            month_offset = today.month - i
+            year_offset = today.year
+            if month_offset <= 0:
+                month_offset += 12
+                year_offset -= 1
+            deal_ymd = f"{year_offset}{month_offset:02d}"
+            result = get_real_estate_transactions(location_info['b_code'], deal_ymd)
+            if result:
+                transactions.extend(result)
 
-    unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
+        unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
 
-    return jsonify({
-        "center": {"lat": location_info['lat'], "lng": location_info['lng']},
-        "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
-    })
+        return jsonify({
+            "center": {"lat": location_info['lat'], "lng": location_info['lng']},
+            "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
+        })
+    except Exception as e:
+        return jsonify({"error": f"서버 오류: {str(e)}"}), 500
+
 
 if __name__ == '__main__':
     app.run(debug=True)
