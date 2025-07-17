@@ -42,10 +42,11 @@ def get_coords_from_address(address):
 
 # 국토교통부 실거래가 조회 API
 def get_real_estate_transactions(b_code, deal_ymd):
+    lawd_cd = b_code[:5]  # 국토부 API는 앞 5자리만 필요
     url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
     params = {
         "serviceKey": GO_DATA_API_KEY,
-        "LAWD_CD": b_code,
+        "LAWD_CD": lawd_cd,
         "DEAL_YMD": deal_ymd,
         "numOfRows": "50"
     }
