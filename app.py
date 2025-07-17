@@ -67,35 +67,61 @@ def get_real_estate_transactions(b_code, deal_ymd):
 def index():
     return render_template('index.html', KAKAO_JS_KEY=KAKAO_JS_KEY_FOR_HTML)
 
+import traceback
+
+ChatGPT의 말:
+위 코드에서 전체적으로는 좋은 방향으로 수정하셨지만, 다음과 같은 구조적 오류 및 문법 오류가 포함되어 있어서 정상 작동하지 않습니다.
+아래에 상세 수정 포인트와 함께 정상 작동하도록 수정한 버전을 제공합니다.
+
+✅ 주요 수정 포인트 요약
+문제	설명	해결 방법
+❌ search() 함수에서 location_info 정의 전 return 발생	location_info가 정의되기 전에 return 하여 오류 발생	location_info 정의 후 로직 실행되도록 순서 조정
+❌ search() 함수 내부에 return이 두 번 있음	try 블록 내 return이 여러 개여서 코드 도달 불가	하나의 return으로 정리
+❌ except 블록이 함수 중간에 위치	try 블록 끝나기 전에 return됨	try ... except 블록을 전체로 감싸도록 조정
+✅ 로그 출력 강화는 잘 적용됨	traceback으로 로그 확인 가능	유지 가능
+
+✅ 수정된 최종 코드
+python
+복사
+편집
 @app.route('/search', methods=['POST'])
 def search():
-    address = request.form.get('address')
-    if not address:
-        return jsonify({"error": "주소가 입력되지 않았습니다."}), 400
+    try:
+        address = request.form.get('address')
+        if not address:
+            return jsonify({"error": "주소가 입력되지 않았습니다."}), 400
 
-    location_info = get_coords_from_address(address)
-    if not location_info:
-        return jsonify({"error": "주소를 찾을 수 없거나 변환에 실패했습니다."}), 404
+        location_info = get_coords_from_address(address)
+        if not location_info:
+            return jsonify({"error": "유효하지 않은 주소이거나 변환에 실패했습니다."}), 404
 
-    today = datetime.now()
-    transactions = []
-    for i in range(12):
-        month_offset = today.month - i
-        year_offset = today.year
-        if month_offset <= 0:
-            month_offset += 12
-            year_offset -= 1
-        deal_ymd = f"{year_offset}{month_offset:02d}"
-        data = get_real_estate_transactions(location_info['b_code'], deal_ymd)
-        if data:
-            transactions.extend(data)
+        today = datetime.now()
+        transactions = []
 
-    unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
+        for i in range(12):
+            month_offset = today.month - i
+            year_offset = today.year
+            if month_offset <= 0:
+                month_offset += 12
+                year_offset -= 1
+            deal_ymd = f"{year_offset}{month_offset:02d}"
+            data = get_real_estate_transactions(location_info['b_code'], deal_ymd)
+            if data:
+                transactions.extend(data)
 
-    return jsonify({
-        "center": {"lat": location_info['lat'], "lng": location_info['lng']},
-        "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
-    })
+        unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
+
+        return jsonify({
+            "center": {"lat": location_info['lat'], "lng": location_info['lng']},
+            "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
+        })
+
+    except Exception as e:
+        print("[에러 발생] search() 함수 내부 예외")
+        print(f"에러 내용: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": "서버 오류: 처리 중 문제가 발생했습니다. 관리자에게 문의하세요."}), 500
 
 # ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 # ★★★★★ 진단용 테스트 페이지: 이 페이지로 접속해서 키를 테스트합니다 ★★★★★
