@@ -67,88 +67,35 @@ def get_real_estate_transactions(b_code, deal_ymd):
 def index():
     return render_template('index.html', KAKAO_JS_KEY=KAKAO_JS_KEY_FOR_HTML)
 
-import traceback
-
-ChatGPT의 말:
-위 코드에서 전체적으로는 좋은 방향으로 수정하셨지만, 다음과 같은 구조적 오류 및 문법 오류가 포함되어 있어서 정상 작동하지 않습니다.
-아래에 상세 수정 포인트와 함께 정상 작동하도록 수정한 버전을 제공합니다.
-
-✅ 주요 수정 포인트 요약
-문제	설명	해결 방법
-❌ search() 함수에서 location_info 정의 전 return 발생	location_info가 정의되기 전에 return 하여 오류 발생	location_info 정의 후 로직 실행되도록 순서 조정
-❌ search() 함수 내부에 return이 두 번 있음	try 블록 내 return이 여러 개여서 코드 도달 불가	하나의 return으로 정리
-❌ except 블록이 함수 중간에 위치	try 블록 끝나기 전에 return됨	try ... except 블록을 전체로 감싸도록 조정
-✅ 로그 출력 강화는 잘 적용됨	traceback으로 로그 확인 가능	유지 가능
-
-✅ 수정된 최종 코드
-python
-복사
-편집
 @app.route('/search', methods=['POST'])
 def search():
-    try:
-        address = request.form.get('address')
-        if not address:
-            return jsonify({"error": "주소가 입력되지 않았습니다."}), 400
+    address = request.form.get('address')
+    if not address:
+        return jsonify({"error": "주소가 입력되지 않았습니다."}), 400
 
-        location_info = get_coords_from_address(address)
-        if not location_info:
-            return jsonify({"error": "유효하지 않은 주소이거나 변환에 실패했습니다."}), 404
+    location_info = get_coords_from_address(address)
+    if not location_info:
+        return jsonify({"error": "주소를 찾을 수 없거나 변환에 실패했습니다."}), 404
 
-        today = datetime.now()
-        transactions = []
+    today = datetime.now()
+    transactions = []
+    for i in range(12):
+        month_offset = today.month - i
+        year_offset = today.year
+        if month_offset <= 0:
+            month_offset += 12
+            year_offset -= 1
+        deal_ymd = f"{year_offset}{month_offset:02d}"
+        data = get_real_estate_transactions(location_info['b_code'], deal_ymd)
+        if data:
+            transactions.extend(data)
 
-        for i in range(12):
-            month_offset = today.month - i
-            year_offset = today.year
-            if month_offset <= 0:
-                month_offset += 12
-                year_offset -= 1
-            deal_ymd = f"{year_offset}{month_offset:02d}"
-            data = get_real_estate_transactions(location_info['b_code'], deal_ymd)
-            if data:
-                transactions.extend(data)
+    unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
 
-        unique_transactions = [dict(t) for t in {tuple(d.items()) for d in transactions}]
-
-        return jsonify({
-            "center": {"lat": location_info['lat'], "lng": location_info['lng']},
-            "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
-        })
-
-    except Exception as e:
-        print("[에러 발생] search() 함수 내부 예외")
-        print(f"에러 내용: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": "서버 오류: 처리 중 문제가 발생했습니다. 관리자에게 문의하세요."}), 500
-
-# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-# ★★★★★ 진단용 테스트 페이지: 이 페이지로 접속해서 키를 테스트합니다 ★★★★★
-# ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-@app.route('/test-key')
-def test_key():
-    test_url = "http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev"
-    test_params = {
-        "serviceKey": GO_DATA_API_KEY,
-        "LAWD_CD": "11680", # 테스트용 지역 코드 (강남구)
-        "DEAL_YMD": "202401", # 테스트용 날짜
-        "numOfRows": "1"
-    }
-    try:
-        print(">>> 공공데이터 API 키 테스트를 시작합니다...")
-        response = requests.get(test_url, params=test_params, timeout=10)
-        print(f">>> 응답 코드: {response.status_code}")
-        print(f">>> 응답 내용: {response.text}")
-        if "SERVICE KEY IS NOT REGISTERED" in response.text:
-            return "<h1>테스트 실패: 공공데이터 API 키가 잘못되었습니다.</h1><p>Render의 환경 변수에서 GO_DATA_API_KEY 값을 다시 확인해주세요.</p>"
-        elif response.status_code == 200:
-            return "<h1>테스트 성공: 공공데이터 API 키가 정상입니다.</h1>"
-        else:
-            return f"<h1>테스트 실패: 알 수 없는 오류. 응답 코드: {response.status_code}</h1><p>{response.text}</p>"
-    except Exception as e:
-        print(f">>> 테스트 중 예외 발생: {e}")
-        return f"<h1>테스트 실패: 서버에서 예외가 발생했습니다.</h1><p>{e}</p>"
+    return jsonify({
+        "center": {"lat": location_info['lat'], "lng": location_info['lng']},
+        "transactions": sorted(unique_transactions, key=lambda x: x['date'], reverse=True)
+    })
 
 if __name__ == '__main__':
     app.run(debug=True)
